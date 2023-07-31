@@ -31,7 +31,7 @@ def plane_from_points(p1, p2, p3):
 
     return (a, b, c, d)
 
-def seq_ransac_plane_fit(points, n_iters=1000, threshold=8, n_planes=1):
+def seq_ransac_plane_fit(points, n_iters=1000, threshold=8, n_planes=3):
 
     best_planes = []
     remaining_data = points
@@ -40,20 +40,46 @@ def seq_ransac_plane_fit(points, n_iters=1000, threshold=8, n_planes=1):
         best_plane = ransac_plane_fit(points=remaining_data, n_iters=n_iters, threshold=threshold)
         inlier_indices = []
 
-        print("1")
-
         for j, (x, y, z) in enumerate(remaining_data):
             if distance_point_to_plane((x, y, z), best_plane) < threshold:
                 inlier_indices.append(j)
 
-        # print("2")
-        # remaining_data = [remaining_data[j] for j in range(len(remaining_data)) if j not in inlier_indices]
-        # remaining_data = np.array(remaining_data)
+        remaining_data = [remaining_data[j] for j in range(len(remaining_data)) if j not in inlier_indices]
+        remaining_data = np.array(remaining_data)
 
-        # best_planes.append(best_plane)
-        # print("3")
+        best_planes.append(best_plane)
 
     return best_planes
+
+def seq_ransac(points, n_iters=1000, threshold=0.005, n_planes=3):
+    n_points = len(points)
+
+    points_indices = np.arange(n_points)
+    remaining_points = points
+        
+    final_planes = []
+    final_inliers = []
+    for i in range(n_planes):
+        plane, inliers = ransac_plane_fit(points=remaining_points, n_iters=n_iters, threshold=threshold)
+
+        # np.append(final_planes, plane)
+        # np.append(final_inliers, points_indices[inliers])
+        final_planes.append(plane)
+        final_inliers.append(points_indices[inliers])
+
+        mask = np.ones(len(remaining_points), dtype=bool)
+        mask[inliers] = False
+        remaining_points = remaining_points[mask]
+
+        mask2 = np.ones(len(points_indices), dtype=bool)
+        mask2[inliers] = False
+        points_indices = points_indices[mask2]
+
+        # points_indices = points_indices[~np.isin(points_indices, inliers)]
+        # print(len(remaining_points))
+        # print(len(points_indices))
+
+    return final_planes, final_inliers
 
 def ransac_plane_fit(points, n_iters=1000, threshold=8):
 
@@ -76,7 +102,8 @@ def ransac_plane_fit(points, n_iters=1000, threshold=8):
         distances = np.abs(np.dot(points - sample_points[0], normal))
 
         # Count the inliers (points close enough to the plane)
-        inliers = points[distances < threshold]
+        # inliers = points[distances < threshold]
+        inliers = np.where(distances < threshold)[0]
         num_inliers = len(inliers)
 
         # Update the best plane if necessary
@@ -89,7 +116,7 @@ def ransac_plane_fit(points, n_iters=1000, threshold=8):
             best_inliers = inliers
             max_inliers = num_inliers
 
-    return best_plane_coeffs
+    return best_plane_coeffs, best_inliers
 
 
 def load_points_file(filename):
@@ -104,7 +131,6 @@ def load_points_file(filename):
     return points
 
 def main():
-
     plydata = PlyData.read('./okay_lets.ply')
     x = plydata['vertex']['x']
     y = plydata['vertex']['y']
@@ -115,33 +141,53 @@ def main():
     # normal = np.array([1, 2, 3])
     # res = np.dot(points, normal)
 
-    plane = ransac_plane_fit(points, n_iters=5000, threshold=0.005)
+    # plane, inliers = ransac_plane_fit(points, n_iters=1000, threshold=0.005)
+    planes, inliers = seq_ransac(points, n_iters=1000, threshold=0.005, n_planes=3)
+    # exit()
 
-    rgb = []
-    for j, (x, y, z) in enumerate(points):
-        if distance_point_to_plane((x, y, z), plane) < 0.005:
-            rgb.append((255, 0, 0))
-        else:
-            rgb.append((255, 255, 255))
+    planes = np.array(planes)
+    print(planes)
+    print(planes.shape)
+    print(type(planes))
+
+
+    print(planes[:,0:2])
+    print(-1*planes[:,3])
+
+    res = np.linalg.solve(planes[:, 0:3], -1*planes[:, 3])
+    print(res)
+    exit()
+
+    length = len(points)
+    rgb = np.full((length, 3), (255, 255, 255)) # weirdly enough 3 x length wasn't able to be broadcasted, investigate!
+
+    rgb[inliers[0]] = (255, 0, 0)
+    rgb[inliers[1]] = (0, 255, 0)
+    rgb[inliers[2]] = (0, 0, 255)
+
+    # rgb = []
+    # for j, (x, y, z) in enumerate(points):
+    #     if distance_point_to_plane((x, y, z), plane) < 0.005:
+    #         rgb.append((0, 255, 0))
+    #     else:
+    #         rgb.append((255, 255, 255))
+    #     print(j)
 
     rgb_np = np.array(rgb)
 
     ver = np.hstack((points, rgb_np))
-
     new_ver = np.core.records.fromarrays(ver.transpose(), 
                                      names='x, y, z, red, green, blue',
                                      formats = 'f4, f4, f4, u1, u1, u1')
-
-    print(new_ver)
 
     # ver = [(0, 0, 0, 0, 255, 255),
     #        (0, 1, 1, 255, 0, 255),
     #        (1, 0, 1, 255, 255, 0),
     #        (1, 1, 0, 255, 0, 0)]
-
     # vertex = np.array(ver, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')])
+
     el = PlyElement.describe(new_ver, 'vertex')
-    PlyData([el], text=True).write('some_ascii.ply')
+    PlyData([el], text=True).write('some_ascii_1.ply')
 
 if __name__ == "__main__":
     main()
