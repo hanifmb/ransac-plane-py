@@ -2,6 +2,7 @@
 import math
 import random
 import numpy as np
+import itertools
 from plyfile import PlyData, PlyElement
 
 
@@ -130,6 +131,21 @@ def load_points_file(filename):
 
     return points
 
+
+def gram_schmidt(vectors):
+    num_vectors, vector_length = vectors.shape
+    orthogonalized_vectors = np.zeros((num_vectors, vector_length))
+
+    for i in range(num_vectors):
+        vector = vectors[i]
+        for j in range(i):
+            projection = np.dot(vectors[i], orthogonalized_vectors[j]) / np.dot(orthogonalized_vectors[j], orthogonalized_vectors[j])
+            vector -= projection * orthogonalized_vectors[j]
+
+        orthogonalized_vectors[i] = vector / np.linalg.norm(vector)
+
+    return orthogonalized_vectors
+
 def main():
     plydata = PlyData.read('./okay_lets.ply')
     x = plydata['vertex']['x']
@@ -146,16 +162,45 @@ def main():
     # exit()
 
     planes = np.array(planes)
-    print(planes)
-    print(planes.shape)
-    print(type(planes))
+
+    # planes_intersect_vec = np.array([])
+    planes_intersect_vec = []
+    for x in itertools.combinations(planes, 2):
+        normal1 = x[0][0:3]
+        normal2 = x[1][0:3]
+
+        dir_vec = np.cross(normal1, normal2)
+        dir_vec_normal = dir_vec / np.linalg.norm(dir_vec)
+
+        planes_intersect_vec.append(dir_vec_normal)
+        # planes_intersect_vec = np.vstack((planes_intersect_vec, dir_vec_normal))
+
+        # print(normal1, normal2)
+        # print("dir vec: ", dir_vec_normal)
+
+    # calculating rotation matrix 
+    planes_intersect_vec = np.array(planes_intersect_vec)
+    orthogonalized_vec = gram_schmidt(planes_intersect_vec)
+    rotation_mat = np.transpose(orthogonalized_vec)
+
+    # intersection of three planes yields a point
+    origin = np.linalg.solve(planes[:, 0:3], -1*planes[:, 3])
+
+    print("before ", planes_intersect_vec)
+    print("after ", orthogonalized_vec)
+    print("rotation mat ", rotation_mat)
+    print("origin ", origin)
 
 
-    print(planes[:,0:2])
-    print(-1*planes[:,3])
+    # print(planes)
+    # print(planes.shape)
+    # print(type(planes))
 
-    res = np.linalg.solve(planes[:, 0:3], -1*planes[:, 3])
-    print(res)
+    # print(planes[:,0:2])
+    # print(-1*planes[:,3])
+
+    # the origin point
+    # print(res)
     exit()
 
     length = len(points)
