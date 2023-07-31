@@ -4,6 +4,7 @@ import random
 import numpy as np
 import itertools
 from plyfile import PlyData, PlyElement
+from scipy.spatial.transform import Rotation
 
 
 def distance_point_to_plane(point, plane):
@@ -186,10 +187,16 @@ def main():
     # intersection of three planes yields a point
     origin = np.linalg.solve(planes[:, 0:3], -1*planes[:, 3])
 
+
+    # convert to quaternion
+    rotation = Rotation.from_matrix(rotation_mat)
+    quaternion = rotation.as_quat()
+
     print("before ", planes_intersect_vec)
     print("after ", orthogonalized_vec)
     print("rotation mat ", rotation_mat)
     print("origin ", origin)
+    print("quaternion ", quaternion)
 
 
     # print(planes)
@@ -201,6 +208,7 @@ def main():
 
     # the origin point
     # print(res)
+
     exit()
 
     length = len(points)
