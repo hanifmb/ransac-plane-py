@@ -173,6 +173,11 @@ def main():
         dir_vec = np.cross(normal1, normal2)
         dir_vec_normal = dir_vec / np.linalg.norm(dir_vec)
 
+        z = dir_vec_normal[2]
+
+        if z > 0:
+            dir_vec_normal = dir_vec_normal * -1
+            
         planes_intersect_vec.append(dir_vec_normal)
         # planes_intersect_vec = np.vstack((planes_intersect_vec, dir_vec_normal))
 
